@@ -1,0 +1,7 @@
+opencv-python
+ultralytics
+wxPython
+Pillow
+logging
+numpy
+pyinstaller
