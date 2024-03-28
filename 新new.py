@@ -18,6 +18,12 @@ aimbot_range = 150
 move_mouse = False
 #敵にエイムが吸い付く精度1~5がおすすめ
 mouse_speed = 1
+# 適切な値武器によって変わる 99は30 まぁ基本30で良いただ精度がmouse_speed = X と同期しているので2とかにしないと効果わからないかも
+anti_recoil_value = 30
+
+
+
+
 MOUSEEVENTF_MOVE = 0x0001
 
 logging.basicConfig(level=logging.INFO)
@@ -44,19 +50,17 @@ def toggle_mouse_movement(e):
 
 keyboard.on_press_key('.', toggle_mouse_movement, suppress=True)
 
+
 def update_frame(event=None):
     global photo
     frame = camera.grab()
     if frame is None:
-        frame = camera.grab()
-    elif frame is None:
         update_frame()
 
     frame = np.array(frame)
 
     if frame.dtype != np.uint8:
-        print(f"Unexpected frame dtype: {frame.dtype}")
-        return
+        update_frame()
 
     if frame is not None:
         frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
@@ -121,19 +125,43 @@ def update_frame(event=None):
         if distance < min_distance and color == (0, 255, 0):  # Only consider boxes within the aimbot range
             min_distance = distance
             closest_box_center = (center_x, center_y)
+
+
     
     if closest_box_center is not None:
         relative_x = closest_box_center[0] - current_mouse_x
         relative_y = closest_box_center[1] - current_mouse_y
+
+
+    # マウスの左クリックと右クリックのキーコード
+    VK_LBUTTON = win32con.VK_LBUTTON
+    VK_RBUTTON = win32con.VK_RBUTTON
+
+    left_click_state = win32api.GetKeyState(VK_LBUTTON)
+    right_click_state = win32api.GetKeyState(VK_RBUTTON)
+
+
+    if left_click_state == -127 or left_click_state == -128:
+        left_click_state = True
+    else:
+        left_click_state = False
     
-    right_click_state = win32api.GetKeyState(win32con.VK_RBUTTON)
     if right_click_state == -127 or right_click_state == -128:
         right_click_pressed = True
     else:
         right_click_pressed = False
+
     
+
+
     if move_mouse and right_click_pressed:
-        ctypes.windll.user32.mouse_event(MOUSEEVENTF_MOVE, relative_x * mouse_speed, relative_y * mouse_speed, 0, 0)
+        ctypes.windll.user32.mouse_event(win32con.MOUSEEVENTF_MOVE, relative_x * mouse_speed, relative_y * mouse_speed, 0, 0)
+    if move_mouse and right_click_pressed and left_click_state:
+        # アンチリコイルの調整値を追加
+        relative_y += anti_recoil_value
+        ctypes.windll.user32.mouse_event(win32con.MOUSEEVENTF_MOVE, relative_x * mouse_speed, relative_y * mouse_speed, 0, 0)
+
+
 
     image = Image.fromarray(overlay)
     image = image.resize(display_size, Image.LANCZOS)
@@ -145,6 +173,7 @@ def update_frame(event=None):
     wx.CallLater(0, update_frame)
 
 update_frame()
+
 
 def on_paint(event):
     if photo is not None:
