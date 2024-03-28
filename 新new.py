@@ -13,11 +13,11 @@ import dxcam
 
 
 #エイムボットの検知範囲
-aimbot_range = 70
+aimbot_range = 150
 #エイムボットの有効か？
 move_mouse = False
 #敵にエイムが吸い付く精度1~5がおすすめ
-mouse_speed = 2
+mouse_speed = 1
 MOUSEEVENTF_MOVE = 0x0001
 
 logging.basicConfig(level=logging.INFO)
