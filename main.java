@@ -1,23 +1,37 @@
-package com.fasterxml.jackson.databind;
+/**
+ * 
+ */
+package javaSoft;
 
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileNotFoundException;
 import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.atomic.AtomicBoolean;
+
+import javax.swing.JColorChooser;
+import javax.swing.JDialog;
+import javax.swing.JOptionPane;
 
 import org.json.JSONObject;
 import org.json.JSONTokener;
 
+import javafx.animation.KeyFrame;
+import javafx.animation.Timeline;
 import javafx.application.Application;
+import javafx.application.Platform;
 import javafx.event.ActionEvent;
 import javafx.event.EventHandler;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.geometry.Rectangle2D;
-import javafx.scene.Group;
 import javafx.scene.Scene;
 import javafx.scene.control.Button;
-import javafx.scene.control.ColorPicker;
 import javafx.scene.control.ContextMenu;
 import javafx.scene.control.Label;
 import javafx.scene.control.MenuItem;
@@ -25,19 +39,36 @@ import javafx.scene.control.Slider;
 import javafx.scene.control.TextInputDialog;
 import javafx.scene.input.MouseButton;
 import javafx.scene.input.MouseEvent;
+import javafx.scene.layout.Background;
+import javafx.scene.layout.BackgroundFill;
+import javafx.scene.layout.CornerRadii;
+import javafx.scene.layout.Pane;
 import javafx.scene.layout.VBox;
 import javafx.scene.paint.Color;
 import javafx.scene.shape.Circle;
+import javafx.scene.shape.Rectangle;
 import javafx.scene.shape.Shape;
 import javafx.stage.Screen;
 import javafx.stage.Stage;
 import javafx.stage.StageStyle;
+import javafx.util.Duration;
 
-public class hello extends Application {
+
+
+
+
+
+
+
+
+
+
+
+
+public class reload extends Application {
 
     private static Stage primaryStage;
     private Stage alphaStage;
-    private Stage circleStage; // Add this line
     private Slider alphaSlider;
     private Label alphaLabel;
     private float alpha = 0.5f;
@@ -45,20 +76,149 @@ public class hello extends Application {
     private double yOffset = 0;
     private JSONObject config;
     private JSONObject defaultConfig;
+    private List<Stage> stages = new ArrayList<>();
+    private boolean espEnabled = false;
+    private Process process = null;
+
+    
 
     public static void main(String[] args) {
         launch(args);
     }
 
+    public void showError(String title, String message) {
+    JOptionPane.showMessageDialog(null, message, title, JOptionPane.ERROR_MESSAGE);
+}
+    public void showMessage(String title, String message) {
+        JOptionPane.showMessageDialog(null, message, title, JOptionPane.PLAIN_MESSAGE);
+    }
+
+
+public void startNewWindow() {
+        Stage primaryStage = new Stage();
+        try {
+            // ディスプレイの解像度を取得
+            Rectangle2D screenBounds = Screen.getPrimary().getVisualBounds();
+
+            // config.jsonから設定を読み込む
+            JSONObject config = new JSONObject(new JSONTokener(new FileInputStream("config.json")));
+            JSONObject circleConfig = config.getJSONObject("circle");
+            String color = circleConfig.getString("color");
+            int size = circleConfig.getInt("size");
+
+            // 外側の円を作成（半径は設定から取得、色も設定から取得）
+            Circle outerCircle = new Circle(size, Color.web(color));
+
+            // 内側の円（ドーナツの穴）を作成（半径は設定から取得-1、色は透明）
+            Circle innerCircle = new Circle(size - 1,Color.TRANSPARENT);
+
+            // 外側の円から内側の円を引いてドーナツ型の形状を作成
+            Shape donut = Shape.subtract(outerCircle, innerCircle);
+            donut.setFill(outerCircle.getFill());
+
+
+            // パネルを作成し、ドーナツ型の形状を追加
+            Pane root = new Pane();
+            root.setBackground(new Background(new BackgroundFill(Color.TRANSPARENT, CornerRadii.EMPTY, Insets.EMPTY)));
+            root.getChildren().add(donut);
+
+            // 透明の点を作成し、パネルの中心に配置
+            Circle transparentDot = new Circle(0, Color.TRANSPARENT);
+            root.getChildren().add(transparentDot);
+            transparentDot.centerXProperty().bind(root.widthProperty().divide(2));
+            transparentDot.centerYProperty().bind(root.heightProperty().divide(2));
+
+            donut.layoutXProperty().bind(transparentDot.centerXProperty());
+            donut.layoutYProperty().bind(transparentDot.centerYProperty());
+
+            // ドーナツの形状が生成された後で中心点を更新
+            donut.boundsInParentProperty().addListener((observable, oldValue, newValue) -> {
+                donut.setTranslateX(-newValue.getWidth() / 2 + newValue.getWidth() / 2);
+                donut.setTranslateY(-newValue.getHeight() / 2 + newValue.getHeight() / 2);
+            });
+
+            // シーンを作成し、パネルを追加
+            Scene scene = new Scene(root, screenBounds.getWidth(), screenBounds.getHeight());
+
+            // シーンの背景を透明に設定
+            scene.setFill(Color.TRANSPARENT);
+
+            // ステージにシーンを設定
+            primaryStage.setScene(scene);
+
+            // ステージのスタイルを設定（装飾なし、透明）
+            primaryStage.initStyle(StageStyle.TRANSPARENT);
+
+            // ステージを常に最前面にする
+            primaryStage.setAlwaysOnTop(true);
+
+            // ステージを表示
+            primaryStage.show();
+            stages.add(primaryStage);
+        } catch(FileNotFoundException e) {
+            e.printStackTrace();
+        }
+    }
+public void stopWindow() {
+    if (!stages.isEmpty()) {
+        Stage stage = stages.get(stages.size() - 1); // 最後に追加されたStageを取得
+        stage.close();
+        stages.remove(stage); // リストから削除
+    }
+}
+
+private void toggleESP() {
+        if (espEnabled) {
+            if (process != null) {
+                process.destroy();
+                process = null;
+            }
+            espEnabled = false;
+            System.out.println("ESPを無効にしました。");
+        } else {
+            try {
+                File currentDir = new File(System.getProperty("user.dir"));
+                File script = new File(currentDir, "new.py");
+                File pythonInterpreter = new File(currentDir, "venv/Scripts/python.exe");
+
+                if (!script.exists()) {
+                    showError("エラー", "new.pyが存在しません");
+                } else if (!pythonInterpreter.exists()) {
+                    showError("エラー", "Pythonのインタープリタが存在しません 付属のsetup.batを実行してください！！");
+                } else {
+                    ProcessBuilder pb = new ProcessBuilder(pythonInterpreter.getAbsolutePath(), script.getAbsolutePath());
+                    process = pb.start();
+                    espEnabled = true;
+                    System.out.println("ESPを有効にしました。");
+                }
+            } catch (IOException e) {
+                e.printStackTrace();
+                showError("エラー", "ESPの起動に失敗しました");
+            }
+        }
+    }
+
+
+
+ 
+
+
     @Override
     public void start(Stage primaryStage) {
-        hello.primaryStage = primaryStage;
+        reload.primaryStage = primaryStage;
         initializeDefaultConfig();
         loadOrCreateConfig();
+        loadWindowPosition();
 
         primaryStage.setTitle("Menu Window");
         primaryStage.initStyle(StageStyle.TRANSPARENT);
         primaryStage.setOpacity(alpha);
+
+        primaryStage.setOnShown(event -> {
+        primaryStage.requestFocus();
+        primaryStage.setAlwaysOnTop(true);
+
+    });
 
         VBox vbox = new VBox();
         vbox.setPadding(new Insets(20));
@@ -74,98 +234,91 @@ public class hello extends Application {
         vbox.setOnMouseDragged(event -> {
             primaryStage.setX(event.getScreenX() - xOffset);
             primaryStage.setY(event.getScreenY() - yOffset);
+            
+        
         });
 
         Label menuClientLabel = new Label("MenuClient");
         menuClientLabel.setStyle("-fx-text-fill: white; -fx-font-size:20px;");
         vbox.getChildren().add(menuClientLabel);
-        VBox.setMargin(menuClientLabel, new Insets(0, 0, 30, 0));
+        
+        Rectangle separator = new Rectangle();
+        separator.setWidth(160);  // メニューの幅に合わせて調整
+        separator.setHeight(1);  // 細い横棒なので高さは1
+        separator.setFill(Color.WHITE);  // 横棒の色を白に設定
+        vbox.getChildren().add(separator);
+        
+        Timeline fiveSecondsWonder = new Timeline(
+        	    new KeyFrame(Duration.seconds(5), event -> saveWindowPosition())
+        	);
+        	fiveSecondsWonder.setCycleCount(Timeline.INDEFINITE);
+        	fiveSecondsWonder.play();
+
+
         
         
-        
 
-        Button circleButton = createButton("画面に円を設置", event -> {
-            // Load the latest config
-            loadOrCreateConfig();
 
-            // Draw circle logic here
-            if (!config.getJSONObject("circle").getBoolean("window_exists")) {
-                // Create a new stage for the circle
-                circleStage = new Stage();
-                circleStage.initStyle(StageStyle.TRANSPARENT);
 
-                // Create a new circle with the color and size from the config
-                Circle outerCircle = new Circle();
-                outerCircle.setFill(Color.valueOf(config.getJSONObject("circle").getString("color")));
-                outerCircle.setRadius(config.getJSONObject("circle").getInt("size"));
+AtomicBoolean isRunning = new AtomicBoolean(false);
 
-                // Create an inner circle
-                Circle innerCircle = new Circle();
-                innerCircle.setRadius(config.getJSONObject("circle").getInt("size") * 0.75); // Adjust as needed
+Button circleButton = createButton("画面に円を設置", event -> {
+    if (isRunning.get()) {
+        stopWindow();
+    } else {
+        startNewWindow();
+    }
+    isRunning.set(!isRunning.get());
+});
+VBox.setMargin(circleButton, new Insets(30, 0, 0, 0));
 
-                // Subtract the inner circle from the outer circle to create a donut shape
-                Shape donut = Shape.subtract(outerCircle, innerCircle);
+setupCircleButtonContextMenu(circleButton);
 
-                // Create a new scene with the donut and set it to the stage
-                Scene circleScene = new Scene(new Group(donut));
-                circleScene.setFill(Color.TRANSPARENT);
-                circleStage.setScene(circleScene);
 
-                // Position the circle stage so that the circle is in the center of the screen
-                Rectangle2D screenBounds = Screen.getPrimary().getVisualBounds();
-                circleStage.setX(screenBounds.getWidth() / 2 - outerCircle.getRadius() * 2);
-                circleStage.setY(screenBounds.getHeight() / 2 - outerCircle.getRadius() * 2);
 
-                // Show the circle stage
-                circleStage.show();
 
-                // Update the config to show that the circle window now exists and is visible
-                config.getJSONObject("circle").put("window_exists", true);
-                config.getJSONObject("circle").put("visible", true);
-            } else if (circleStage != null) {
-                // If the circle window already exists, check if it is visible
-                if (config.getJSONObject("circle").getBoolean("visible")) {
-                    // If the circle window is visible, hide it
-                    circleStage.hide();
 
-                    // Update the config to show that the circle is now hidden
-                    config.getJSONObject("circle").put("visible", false);
-                } else {
-                    // If the circle window is not visible, show it
-                    circleStage.show();
+    @SuppressWarnings("deprecation")
+Button startButton = createButton("アプリ起動", event -> {
+	
+    // Start app logic here
+    String programPath = config.getJSONObject("program_path").toString();
+    if (!programPath.isEmpty()) {
+        File file = new File(programPath);
+        if (file.exists() && !file.isDirectory()) {
+            String extension = "";
 
-                    // Update the config to show that the circle is now visible
-                    config.getJSONObject("circle").put("visible", true);
-                }
+            int i = programPath.lastIndexOf('.');
+            if (i > 0) {
+                extension = programPath.substring(i+1);
             }
+            if (extension.equals("exe") || extension.equals("lnk")) {
+                try {
+                    Runtime.getRuntime().exec(programPath);
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+            } else {
+                showError("エラー","指定されたパスは実行可能なアプリケーションを指していません");
+            }
+        } else {
+            showError("エラー", "指定されたパスが存在しません");
+        }
+    }
+});
+setupStartButtonContextMenu(startButton);
 
-            // Save the updated config
-            saveConfig();
-        });
-        setupCircleButtonContextMenu(circleButton);
 
 
-        
+        Button espButton = createButton("ESP/[使用して良いか確認]", event -> toggleESP());
 
 
 
-
-
-
-
-
-        Button startButton = createButton("配信スタート", event -> {
-            // Start broadcast logic here
-        });
-
-        Button espButton = createButton("ESP/[使用して良いか確認]", event -> {
-            // ESP logic here
-        });
 
         Button alphaButton = createButton("透明度調整", event -> openAlphaWindow());
 
         Button overviewButton = createButton("概要", event -> {
-            // Show overview logic here
+        	showMessage("概要v.0.1[java]","MenuClientのJava版ですPythonとの違う点は自分で探してください\n開発者はこう君(1人)です");
         });
 
         VBox.setMargin(overviewButton, new Insets(0, 0, 30, 0));
@@ -177,37 +330,81 @@ public class hello extends Application {
         Scene scene = new Scene(vbox, 160, 350);
         primaryStage.setScene(scene);
         primaryStage.show();
+        
     }
 
-    private void initializeDefaultConfig() {
-        defaultConfig = new JSONObject();
-        JSONObject circle = new JSONObject();
-        circle.put("window_exists", false);
-        circle.put("visible", false);
-        circle.put("color", "white");
-        circle.put("size", 50);
-        circle.put("antialiasing", false);
+    
+    private void setupStartButtonContextMenu(Button startButton) {
+    ContextMenu contextMenu = new ContextMenu();
 
-        JSONObject windowPosition = new JSONObject();
-        windowPosition.put("x", 681);
-        windowPosition.put("y", 87);
+    MenuItem pathItem = new MenuItem("プログラムのパスを設定");
+    pathItem.setOnAction(event -> {
+        TextInputDialog dialog = new TextInputDialog("");
+        dialog.setTitle("プログラムのパス設定");
+        dialog.setHeaderText("新しいプログラムのパスを入力してください:");
+        dialog.setContentText("パス:");
 
-        defaultConfig.put("circle", circle);
-        defaultConfig.put("alpha", 0.5);
-        defaultConfig.put("program_path", new JSONObject());
-        defaultConfig.put("menu_color", "black");
-        defaultConfig.put("window_position", windowPosition);
-    }
+        Optional<String> result = dialog.showAndWait();
+        result.ifPresent(path -> {
+            config.put("program_path", path);
+            saveConfig();
+        });
+    });
+
+    contextMenu.getItems().addAll(pathItem);
+
+    startButton.addEventHandler(MouseEvent.MOUSE_CLICKED, (MouseEvent event) -> {
+        if (event.getButton() == MouseButton.SECONDARY) {
+            contextMenu.show(startButton, event.getScreenX(), event.getScreenY());
+        }
+    });
+}
+
+
+private void saveWindowPosition() {
+    JSONObject windowPosition = new JSONObject();
+    windowPosition.put("x", primaryStage.getX());
+    windowPosition.put("y", primaryStage.getY());
+    config.put("window_position", windowPosition);
+    saveConfig();
+}
+
+private void loadWindowPosition() {
+    JSONObject windowPosition = config.getJSONObject("window_position");
+    double x = windowPosition.getDouble("x");
+    double y = windowPosition.getDouble("y");
+    primaryStage.setX(x);
+    primaryStage.setY(y);
+}
+
+
+private void initializeDefaultConfig() {
+    defaultConfig = new JSONObject();
+    JSONObject circle = new JSONObject();
+    circle.put("color", "white");
+    circle.put("size", 50);
+
+    JSONObject windowPosition = new JSONObject();
+    windowPosition.put("x", 100);
+    windowPosition.put("y", 100);
+
+    defaultConfig.put("circle", circle);
+    defaultConfig.put("alpha", 0.5); // alpha value added to default config
+    defaultConfig.put("program_path", new JSONObject());
+    defaultConfig.put("menu_color", "black");
+    defaultConfig.put("window_position", windowPosition);
+}
 
     private void loadOrCreateConfig() {
-        try {
-            FileReader reader = new FileReader("config.json");
-            config = new JSONObject(new JSONTokener(reader));
-        } catch (Exception e) {
-            config = defaultConfig;
-            saveConfig();
-        }
+    try {
+        FileReader reader = new FileReader("config.json");
+        config = new JSONObject(new JSONTokener(reader));
+        alpha = config.getFloat("alpha"); // Load alpha value from config
+    } catch (Exception e) {
+        config = defaultConfig;
+        saveConfig();
     }
+}
 
     private void saveConfig() {
         try (FileWriter file = new FileWriter("config.json")) {
@@ -222,6 +419,11 @@ public class hello extends Application {
         Button button = new Button(text);
         button.setOnAction(eventHandler);
         button.setStyle("-fx-background-color: #4d4d4d; -fx-text-fill: white;");
+     // ボタンが押されたときのスタイルを設定
+        button.setOnMousePressed(event -> button.setStyle("-fx-background-color: #7d7d7d; -fx-text-fill: white;"));
+
+        // ボタンが離されたときのスタイルを設定（元のスタイルに戻す）
+        button.setOnMouseReleased(event -> button.setStyle("-fx-background-color: #4d4d4d; -fx-text-fill: white;"));
         return button;
     }
 
@@ -230,16 +432,16 @@ public class hello extends Application {
 
         MenuItem colorItem = new MenuItem("色を変更");
         colorItem.setOnAction(event -> {
-            ColorPicker colorPicker = new ColorPicker();
-            colorPicker.setValue(Color.valueOf(config.getJSONObject("circle").getString("color")));
-            colorPicker.show();
-
-            colorPicker.setOnAction(e -> {
-                Color newColor = colorPicker.getValue();
-                config.getJSONObject("circle").put("color", "#" + newColor.toString().substring(2, 8));
-                saveConfig();
-            });
-        });
+    Platform.runLater(() -> {
+        final JColorChooser colorChooser = new JColorChooser();
+        final JDialog dialog = JColorChooser.createDialog(null, "色を変更", true, colorChooser, e -> {
+            java.awt.Color newColor = colorChooser.getColor();
+            config.getJSONObject("circle").put("color", "#" + Integer.toHexString(newColor.getRGB()).substring(2));
+            saveConfig();
+        }, null);
+        dialog.setVisible(true);
+    });
+});
 
         MenuItem sizeItem = new MenuItem("サイズを変更");
         sizeItem.setOnAction(event -> {
@@ -286,9 +488,11 @@ public class hello extends Application {
         alphaStage.show();
     }
 
-    private void changeAlpha(float value) {
-        alpha = Math.max(value, 0.10f);
-        primaryStage.setOpacity(alpha);
-        alphaLabel.setText("現在の透明度: " + alpha);
-    }
+private void changeAlpha(float value) {
+    alpha = Math.max(value, 0.10f);
+    primaryStage.setOpacity(alpha);
+    alphaLabel.setText("現在の透明度: " + alpha);
+    config.put("alpha", alpha); // Save alpha value to config
+    saveConfig();
+}
 }
